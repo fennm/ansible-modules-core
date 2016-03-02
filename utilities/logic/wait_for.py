@@ -103,7 +103,7 @@ options:
 notes:
   - The ability to use search_regex with a port connection was added in 1.7.
 requirements: []
-author: 
+author:
     - "Jeroen Hoekx (@jhoekx)"
     - "John Jarvis (@jarv)"
     - "Andrii Radyk (@AnderEnder)"
@@ -127,7 +127,7 @@ EXAMPLES = '''
 - wait_for: path=/tmp/foo search_regex=completed
 
 # wait until the lock file is removed
-- wait_for: path=/var/lock/file.lock state=absent 
+- wait_for: path=/var/lock/file.lock state=absent
 
 # wait until the process is finished and pid was destroyed
 - wait_for: path=/proc/3466/status state=absent
@@ -322,16 +322,21 @@ def _create_connection( (host, port), connect_timeout):
         connect_socket = socket.create_connection( (host, port), connect_timeout)
     return connect_socket
 
+def _timedelta_total_seconds(timedelta):
+    return (
+        timedelta.microseconds + 0.0 +
+        (timedelta.seconds + timedelta.days * 24 * 3600) * 10 ** 6) / 10 ** 6
+
 def main():
 
     module = AnsibleModule(
         argument_spec = dict(
             host=dict(default='127.0.0.1'),
-            timeout=dict(default=300),
-            connect_timeout=dict(default=5),
-            delay=dict(default=0),
-            port=dict(default=None),
-            path=dict(default=None),
+            timeout=dict(default=300, type='int'),
+            connect_timeout=dict(default=5, type='int'),
+            delay=dict(default=0, type='int'),
+            port=dict(default=None, type='int'),
+            path=dict(default=None, type='path'),
             search_regex=dict(default=None),
             state=dict(default='started', choices=['started', 'stopped', 'present', 'absent', 'drained']),
             exclude_hosts=dict(default=None, type='list')
@@ -341,13 +346,10 @@ def main():
     params = module.params
 
     host = params['host']
-    timeout = int(params['timeout'])
-    connect_timeout = int(params['connect_timeout'])
-    delay = int(params['delay'])
-    if params['port']:
-        port = int(params['port'])
-    else:
-        port = None
+    timeout = params['timeout']
+    connect_timeout = params['connect_timeout']
+    delay = params['delay']
+    port = params['port']
     state = params['state']
     path = params['path']
     search_regex = params['search_regex']
@@ -432,7 +434,7 @@ def main():
                     except IOError:
                         pass
             elif port:
-                alt_connect_timeout = math.ceil((end - datetime.datetime.now()).total_seconds())
+                alt_connect_timeout = math.ceil(_timedelta_total_seconds(end - datetime.datetime.now()))
                 try:
                     s = _create_connection((host, port), min(connect_timeout, alt_connect_timeout))
                 except:
@@ -444,7 +446,7 @@ def main():
                         data = ''
                         matched = False
                         while datetime.datetime.now() < end:
-                            max_timeout = math.ceil((end - datetime.datetime.now()).total_seconds())
+                            max_timeout = math.ceil(_timedelta_total_seconds(end - datetime.datetime.now()))
                             (readable, w, e) = select.select([s], [], [], max_timeout)
                             if not readable:
                                 # No new data.  Probably means our timeout
